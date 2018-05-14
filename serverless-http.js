@@ -14,6 +14,19 @@ const defaultOptions = {
   requestId: 'x-request-id'
 };
 
+function logFalsyErrors (func) {
+  return function () {
+    try {
+      return func();
+    } catch (e) {
+      if (!e) {
+        console.log('A falsy value was thrown', e, new Error().stack);
+      }
+      throw e;
+    }
+  }
+}
+
 module.exports = function(app, opts) {
   const handler = getHandler(app);
   const options = Object.assign({}, defaultOptions, opts);
@@ -23,21 +36,19 @@ module.exports = function(app, opts) {
     ctx.callbackWaitsForEmptyEventLoop = !!options.callbackWaitsForEmptyEventLoop;
 
     Promise.resolve()
-      .then(() => {
+      .then(logFalsyErrors(() => {
         const context = ctx || {};
         const event = cleanUpEvent(evt);
 
         const request = new Request(event, options);
 
         return finish(request, event, context, options.request)
-          .then(() => {
+          .then(logFalsyErrors(() => {
             const response = new Response(request);
-
             handler(request, response);
-
             return finish(response, event, context, options.response);
-          });
-    })
+          }));
+    }))
     .then(res => {
       process.nextTick(() => {
         const statusCode = res.statusCode;
